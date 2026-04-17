@@ -6,7 +6,9 @@ export const EXCHANGE ={
 
 export const QUEUE = {
     EMAIL_SERVICE_QUEUE: { name:'email_service.queue', durable: true},
-    USER_SERVICE_QUEUE: { name:'user_service.queue', durable: true},
+    USER_SERVICE_CREATE_USER_QUEUE: { name:'user_service.create_user_queue', durable: true},
+    USER_SERVICE_UPDATE_USER_QUEUE: { name:'user_service.update_user_queue', durable: true},
+    USER_SERVICE_DELETE_USER_QUEUE: { name:'user_service.delete_user_queue', durable: true},
     LOGGING_SERVICE_ERROR_QUEUE: { name:'logging_service.error_queue', durable: true},
     LOGGING_SERVICE_INFO_QUEUE: { name:'logging_service.info_queue', durable: true},
     LOGGING_SERVICE_WARN_QUEUE: { name:'logging_service.warn_queue', durable: true},
