@@ -18,5 +18,7 @@ export class EmailServiceController {
   })
   sendEmail(msg: any) {
     console.log("mo phong gui email den user")
+      console.log("mo phong gui email den user")
+      console.log("mo phong gui email den user")
   }
 }
