@@ -1,99 +1,43 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# 🐇 RabbitMQ - Bài Tập Thực Hành
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Dự án này là một monorepo NestJS kết hợp RabbitMQ (`@golevelup/nestjs-rabbitmq`), dùng để demo các lỗi thường gặp trong Message Queue và cách khắc phục.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+---
 
-## Description
+## 🚀 Cách chạy dự án
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+1. **Khởi động toàn bộ (RabbitMQ + Order Service + Email Service):**
+   ```bash
+   docker compose up --build
+   ```
+   *Quá trình này sẽ khởi chạy:*
+   - RabbitMQ Management UI: [http://localhost:15672](http://localhost:15672) (User/Pass: `admin`/`admin`)
+   - Order Service: `http://localhost:3002`
+   - Email Service: `http://localhost:3001` (Chạy ẩn dưới dạng Consumer)
 
-## Project setup
+2. **Gửi lệnh test (Tạo 5 đơn hàng):**
+   ```bash
+   curl -X POST http://localhost:3002/orders/place-batch
+   ```
 
-```bash
-$ npm install
-```
+---
 
-## Compile and run the project
+## 🎯 Bài 1: Message mất khi Consumer crash (Hoặc bị Loop vô hạn)
 
-```bash
-# development
-$ npm run start
+### Ngữ cảnh
+- `order-service` gửi message báo có đơn hàng mới.
+- `email-service` nhận message để gửi email nhưng bị lỗi (Crash, đứt mạng SMTP...).
 
-# watch mode
-$ npm run start:dev
+### ❌ Lỗi 1: Mất dữ liệu (Auto-ack hoặc `Nack(false)`)
+- Theo mặc định, nếu không cấu hình gì, RabbitMQ dùng **auto-ack**, khi lỗi xảy ra message sẽ bị vứt đi luôn.
+- Trong `email-service.controller.ts`, tôi đã giả lập bằng cách trả về `return new Nack(false)`.
+- **Hậu quả:** Trên RabbitMQ, message biến mất khỏi Queue. Người dùng không bao giờ nhận được email.
 
-# production mode
-$ npm run start:prod
-```
+### ❌ Lỗi 2: Vòng lặp vô hạn (Infinite Loop với `Nack(true)`)
+- Để chống mất dữ liệu, chúng ta gọi **Manual Ack** và trả về `return new Nack(true)` khi gặp lỗi (nằm trong file `email-service.controller.fixed.ts`).
+- **Hậu quả:** Message được giữ lại nhưng lập tức bị đẩy trả về Consumer. Consumer tiếp tục chạy lỗi và tiếp tục trả về. Quá trình này lặp lại hàng nghìn lần mỗi giây gây treo CPU (Infinite Loop).
 
-## Run tests
+### ✅ Bài học rút ra
+Không bao giờ dùng `requeue=true` một cách mù quáng cho những lỗi không thể tự phục hồi ngay lập tức. 
 
-```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
-# RabbitMQ
+Để giải quyết bài toán này mà không bị Loop vô hạn, chúng ta sẽ chuyển sang **Bài 3: Dead Letter Queue (DLQ)** và **Bài 5: Retry Exponential Backoff**.

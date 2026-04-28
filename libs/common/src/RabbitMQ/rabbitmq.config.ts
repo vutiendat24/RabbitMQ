@@ -18,9 +18,9 @@ export interface ServiceRabbitMQConfig {
   queues: QueueBindingConfig[];
 }
 
-export function getRabbitMQModuleConfig(
+export function RabbitMQModuleConfig(
   config: ServiceRabbitMQConfig,
-  configService: ConfigService,
+  configService: ConfigService,   // Inject ConfigService to access environment variables
 ) {
   return {
     uri: configService.get<string>('RABBITMQ_URL', 'amqp://admin:admin@localhost:5672'),

@@ -117,7 +117,7 @@ async sendBulkEmail() {
 // Trong module config
 RabbitMQModule.forRootAsync({
   useFactory: (configService: ConfigService) => ({
-    ...getRabbitMQModuleConfig({ exchanges: [...], queues: [...] }, configService),
+    ...RabbitMQModuleConfig({ exchanges: [...], queues: [...] }, configService),
     prefetchCount: 5, // Chỉ nhận tối đa 5 message chưa ack
   }),
   inject: [ConfigService],
