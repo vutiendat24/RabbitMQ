@@ -20,7 +20,7 @@ export interface ServiceRabbitMQConfig {
 
 export function getRabbitMQModuleConfig(
   config: ServiceRabbitMQConfig,
-  configService: ConfigService,
+  configService: ConfigService,   // Inject ConfigService to access environment variables
 ) {
   return {
     uri: configService.get<string>('RABBITMQ_URL', 'amqp://admin:admin@localhost:5672'),
