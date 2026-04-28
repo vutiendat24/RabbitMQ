@@ -9,7 +9,7 @@ import { EXCHANGE, RabbitMQModuleConfig } from '@libs/common';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: 'apps/order-service/src/.env',
     }),
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],

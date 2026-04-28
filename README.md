@@ -12,12 +12,12 @@ Dự án này là một monorepo NestJS kết hợp RabbitMQ (`@golevelup/nestjs
    ```
    *Quá trình này sẽ khởi chạy:*
    - RabbitMQ Management UI: [http://localhost:15672](http://localhost:15672) (User/Pass: `admin`/`admin`)
-   - Order Service: `http://localhost:3000`
+   - Order Service: `http://localhost:3002`
    - Email Service: `http://localhost:3001` (Chạy ẩn dưới dạng Consumer)
 
 2. **Gửi lệnh test (Tạo 5 đơn hàng):**
    ```bash
-   curl -X POST http://localhost:3000/orders/place-batch
+   curl -X POST http://localhost:3002/orders/place-batch
    ```
 
 ---

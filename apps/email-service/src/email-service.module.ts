@@ -8,7 +8,7 @@ import { BINDING_KEY, EXCHANGE, RabbitMQModuleConfig, QUEUE } from '@libs/common
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: 'apps/email-service/src/.env',
     }),
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],

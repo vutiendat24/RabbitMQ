@@ -22,7 +22,7 @@ services:
       dockerfile: Dockerfile
     container_name: order-service
     ports:
-      - "3000:3000"
+      - "3002:3002"
     # Overwrite the default command to run specific service in watch mode
     command: npx nest start order-service --watch
     volumes:
@@ -32,7 +32,7 @@ services:
       - /usr/src/app/node_modules
     environment:
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
-      - PORT=3000
+      - PORT=3002
     depends_on:
       rabbitmq:
         condition: service_healthy
