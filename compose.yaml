@@ -33,6 +33,9 @@ services:
     environment:
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
       - PORT=3002
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=2000
+      - WATCHPACK_POLLING=true
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -51,6 +54,9 @@ services:
     environment:
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
       - PORT=3001
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=2000
+      - WATCHPACK_POLLING=true
     depends_on:
       rabbitmq:
         condition: service_healthy

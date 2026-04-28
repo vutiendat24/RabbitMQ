@@ -13,7 +13,8 @@ import { BINDING_KEY, EXCHANGE, RabbitMQModuleConfig, QUEUE } from '@libs/common
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        return RabbitMQModuleConfig(
+        return{
+         ...RabbitMQModuleConfig(
           {
             exchanges: [
               { name: EXCHANGE.EMAIL_SERVICE_DIRECT.name, type: EXCHANGE.EMAIL_SERVICE_DIRECT.type, options: { durable: true } },
@@ -28,7 +29,10 @@ import { BINDING_KEY, EXCHANGE, RabbitMQModuleConfig, QUEUE } from '@libs/common
             ],
           },
           configService,
-        );
+        ),
+        prefetchCount: 5,
+      }
+          
       },
       inject: [ConfigService],
     }),
