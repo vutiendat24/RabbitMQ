@@ -18,7 +18,7 @@ export interface ServiceRabbitMQConfig {
   queues: QueueBindingConfig[];
 }
 
-export function getRabbitMQModuleConfig(
+export function RabbitMQModuleConfig(
   config: ServiceRabbitMQConfig,
   configService: ConfigService,   // Inject ConfigService to access environment variables
 ) {

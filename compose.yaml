@@ -1,9 +1,59 @@
-
 services:
-  server:
-    build:
-      context: .
-    environment:
-      NODE_ENV: production
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: rabbitmq
     ports:
-      - 5000:5000
+      - "5672:5672"   # AMQP protocol port
+      - "15672:15672" # Management UI port
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 5s
+      timeout: 10s
+      retries: 5
+
+  order-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: order-service
+    ports:
+      - "3000:3000"
+    # Overwrite the default command to run specific service in watch mode
+    command: npx nest start order-service --watch
+    volumes:
+      # Sync source code for live-reload
+      - .:/usr/src/app
+      # Avoid overriding linux node_modules with windows node_modules
+      - /usr/src/app/node_modules
+    environment:
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - PORT=3000
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  email-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: email-service
+    ports:
+      - "3001:3001"
+    command: npx nest start email-service --watch
+    volumes:
+      - .:/usr/src/app
+      - /usr/src/app/node_modules
+    environment:
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - PORT=3001
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  rabbitmq_data:

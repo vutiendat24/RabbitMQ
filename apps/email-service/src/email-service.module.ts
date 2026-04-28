@@ -1,9 +1,9 @@
-import { Module } from  '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { EmailServiceController } from './email-service.controller';
 import { EmailServiceService } from './email-service.service';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RabbitMQModule } from '@golevelup/nestjs-rabbitmq';
-import { BINDING_KEY, EXCHANGE, getRabbitMQModuleConfig, QUEUE } from '@libs/common';
+import { BINDING_KEY, EXCHANGE, RabbitMQModuleConfig, QUEUE } from '@libs/common';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -13,7 +13,7 @@ import { BINDING_KEY, EXCHANGE, getRabbitMQModuleConfig, QUEUE } from '@libs/com
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        return getRabbitMQModuleConfig(
+        return RabbitMQModuleConfig(
           {
             exchanges: [
               { name: EXCHANGE.EMAIL_SERVICE_DIRECT.name, type: EXCHANGE.EMAIL_SERVICE_DIRECT.type, options: { durable: true } },
@@ -36,4 +36,4 @@ import { BINDING_KEY, EXCHANGE, getRabbitMQModuleConfig, QUEUE } from '@libs/com
   controllers: [EmailServiceController],
   providers: [EmailServiceService],
 })
-export class EmailServiceModule {}
+export class EmailServiceModule { }
