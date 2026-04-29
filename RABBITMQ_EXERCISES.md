@@ -37,19 +37,23 @@ async sendEmail(msg: any) {
 **Bước 3:** Fix bằng manual ack:
 
 ```typescript
+import { Nack } from '@golevelup/nestjs-rabbitmq';
+
 @RabbitSubscribe({
   exchange: EXCHANGE.EMAIL_SERVICE_DIRECT.name,
   routingKey: BINDING_KEY.EMAIL_SERVICE_SEND_EMAIL,
   queue: QUEUE.EMAIL_SERVICE_QUEUE.name,
 })
-async sendEmail(msg: any, amqpMsg: ConsumeMessage, channel: Channel) {
+async sendEmail(msg: any) {
   try {
     console.log('Gửi email:', msg);
     // await sendEmailAPI(msg);
-    channel.ack(amqpMsg);
+    
+    // Return bình thường → thư viện tự động ack
+    return;
   } catch (error) {
-    // requeue=true → message quay lại queue
-    channel.nack(amqpMsg, false, true);
+    // return Nack(true) → message quay lại queue
+    return new Nack(true);
   }
 }
 ```
@@ -85,11 +89,11 @@ RabbitMQ push message tới consumer không giới hạn. Consumer nhận nhiề
   routingKey: BINDING_KEY.EMAIL_SERVICE_SEND_EMAIL,
   queue: QUEUE.EMAIL_SERVICE_QUEUE.name,
 })
-async sendEmail(msg: any, amqpMsg: ConsumeMessage, channel: Channel) {
+async sendEmail(msg: any) {
   console.log(`[${new Date().toISOString()}] Bắt đầu gửi email:`, msg.to);
   await new Promise(resolve => setTimeout(resolve, 2000)); // Giả lập 2s
   console.log(`[${new Date().toISOString()}] Gửi xong:`, msg.to);
-  channel.ack(amqpMsg);
+  // Return bình thường → thư viện tự động ack
 }
 ```
 
@@ -202,16 +206,20 @@ async handleDeadLetter(msg: any) {
 **Bước 4:** Consumer chính reject message lỗi (không requeue):
 
 ```typescript
-async sendEmail(msg: any, amqpMsg: ConsumeMessage, channel: Channel) {
+import { Nack } from '@golevelup/nestjs-rabbitmq';
+
+async sendEmail(msg: any) {
   try {
     if (!msg.to || !msg.to.includes('@')) {
       throw new Error('Invalid email');
     }
     // ... gửi email
-    channel.ack(amqpMsg);
+    
+    // Return bình thường → thư viện tự động ack
+    return;
   } catch (error) {
     console.log('Reject message → chuyển vào DLQ');
-    channel.nack(amqpMsg, false, false); // requeue=false → vào DLX
+    return new Nack(false); // requeue=false → đẩy vào DLX
   }
 }
 ```
@@ -258,7 +266,7 @@ export class EmailServiceController {
     routingKey: BINDING_KEY.EMAIL_SERVICE_SEND_EMAIL,
     queue: QUEUE.EMAIL_SERVICE_QUEUE.name,
   })
-  async processPayment(msg: any, amqpMsg: ConsumeMessage, channel: Channel) {
+  async processPayment(msg: any, amqpMsg: ConsumeMessage) {
     const messageId = amqpMsg.properties.messageId;
 
     // KHÔNG có idempotency check → trừ tiền trùng
@@ -267,7 +275,7 @@ export class EmailServiceController {
 
     // Giả lập ack chậm - 50% timeout
     await new Promise(resolve => setTimeout(resolve, 3000));
-    channel.ack(amqpMsg);
+    // Return bình thường → thư viện tự động ack
   }
 }
 ```
@@ -295,20 +303,19 @@ async makePayment() {
 **Bước 4:** Fix với idempotency check:
 
 ```typescript
-async processPayment(msg: any, amqpMsg: ConsumeMessage, channel: Channel) {
+async processPayment(msg: any, amqpMsg: ConsumeMessage) {
   const messageId = amqpMsg.properties.messageId;
 
   // Check idempotency
   if (this.processedIds.has(messageId)) {
     console.log(`[SKIP] Message ${messageId} đã xử lý rồi`);
-    channel.ack(amqpMsg);
-    return;
+    return; // Thư viện tự động ack
   }
 
   this.balance -= msg.amount;
   this.processedIds.add(messageId);
   console.log(`Trừ ${msg.amount}, còn lại: ${this.balance}`);
-  channel.ack(amqpMsg);
+  // Return bình thường → thư viện tự động ack
 }
 ```
 
@@ -366,7 +373,7 @@ export const QUEUE = {
 **Bước 3:** Consumer đếm retry và route tới đúng retry queue:
 
 ```typescript
-async sendEmail(msg: any, amqpMsg: ConsumeMessage, channel: Channel) {
+async sendEmail(msg: any, amqpMsg: ConsumeMessage) {
   const retryCount = (amqpMsg.properties.headers?.['x-retry-count'] || 0) as number;
   const retryQueues = ['email.retry.1', 'email.retry.2', 'email.retry.3'];
   const maxRetries = 3;
@@ -376,9 +383,9 @@ async sendEmail(msg: any, amqpMsg: ConsumeMessage, channel: Channel) {
     if (Math.random() < 0.8) throw new Error('SMTP 503');
 
     console.log('Gửi email thành công!');
-    channel.ack(amqpMsg);
+    // Không lỗi → thư viện tự động ack
   } catch (error) {
-    channel.ack(amqpMsg); // Ack message hiện tại
+    // Đã catch error → hàm kết thúc bình thường → message hiện tại tự động ack (xóa khỏi queue)
 
     if (retryCount >= maxRetries) {
       console.log(`[DLQ] Hết retry (${retryCount}/${maxRetries})`);

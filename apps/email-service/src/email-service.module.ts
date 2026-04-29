@@ -18,6 +18,7 @@ import { BINDING_KEY, EXCHANGE, RabbitMQModuleConfig, QUEUE } from '@libs/common
             {
               exchanges: [
                 { name: EXCHANGE.EMAIL_SERVICE_DIRECT.name, type: EXCHANGE.EMAIL_SERVICE_DIRECT.type, options: { durable: true } },
+                { name: EXCHANGE.DLX_EXCHANGE.name, type: EXCHANGE.DLX_EXCHANGE.type, options: { durable: true } },
               ],
               queues: [
                 {

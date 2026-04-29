@@ -75,14 +75,4 @@ export class EmailServiceController {
     }
   }
 
-  // handle  DLQ event
-  @RabbitSubscribe({
-    exchange: EXCHANGE.DLX_EXCHANGE.name,
-    routingKey: BINDING_KEY.EMAIL_DLQ,
-    queue: QUEUE.EMAIL_SERVICE_DLQ.name,
-  })
-  async handleDeadLetter(msg: any) {
-    console.error('[DLQ] Message lỗi:', JSON.stringify(msg));
-    // Lưu vào DB hoặc gửi alert
-  }
 }

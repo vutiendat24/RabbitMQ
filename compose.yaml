@@ -11,16 +11,17 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: rabbitmq-diagnostics -q ping
+      test: rabbitmq-diagnostics -q check_running
       interval: 5s
       timeout: 10s
-      retries: 5
+      retries: 10
 
   order-service:
     build: 
       context: .
       dockerfile: Dockerfile
     container_name: order-service
+    restart: on-failure
     ports:
       - "3002:3002"
     # Overwrite the default command to run specific service in watch mode
@@ -32,6 +33,7 @@ services:
       - /usr/src/app/node_modules
     environment:
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - RABBITMQ_TIMEOUT=30000
       - PORT=3002
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=2000
@@ -45,6 +47,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: email-service
+    restart: on-failure
     ports:
       - "3001:3001"
     command: npx nest start email-service --watch
@@ -53,6 +56,7 @@ services:
       - /usr/src/app/node_modules
     environment:
       - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672
+      - RABBITMQ_TIMEOUT=30000
       - PORT=3001
       - CHOKIDAR_USEPOLLING=true
       - CHOKIDAR_INTERVAL=2000

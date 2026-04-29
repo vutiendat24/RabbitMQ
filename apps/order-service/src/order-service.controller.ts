@@ -21,7 +21,10 @@ export class OrderServiceController {
       await this.amqpConnection.publish(
         EXCHANGE.EMAIL_SERVICE_DIRECT.name,
         BINDING_KEY.EMAIL_SERVICE_SEND_EMAIL,
-        { to: `user${i}@test.com`, subject: `Email ${i}` },
+        {
+          to: 'invalid-email',
+          subject: 'Test DLQ'
+        },
       );
     }
     return { sent: 100 };
