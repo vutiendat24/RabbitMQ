@@ -2,6 +2,7 @@ export const EXCHANGE ={
     EMAIL_SERVICE_DIRECT: { name:'email_service.direct', type: 'direct'},
     USER_SERVICE_DIRECT: { name:'user_service.direct', type: 'direct'},
     LOGGING_SERVICE_FANOUT: { name:'logging_service.fanout', type: 'fanout'},
+    DLX_EXCHANGE: { name: 'dlx.direct', type: 'direct' },
 } as const
 
 export const QUEUE = {
@@ -13,6 +14,7 @@ export const QUEUE = {
     LOGGING_SERVICE_INFO_QUEUE: { name:'logging_service.info_queue', durable: true},
     LOGGING_SERVICE_WARN_QUEUE: { name:'logging_service.warn_queue', durable: true},
     LOGGING_SERVICE_ALL_QUEUE: { name:'logging_service.all_queue', durable: true},
+    EMAIL_SERVICE_DLQ: { name: 'email_service.dlq', durable: true },
 }as const
 
 export const ROUTING_KEY = {
@@ -36,4 +38,5 @@ export const BINDING_KEY = {
     LOGGING_SERVICE_ERROR_LOG: 'logging_service.error_log',
     LOGGING_SERVICE_INFO_LOG: 'logging_service.info_log',
     LOGGING_SERVICE_WARN_LOG: 'logging_service.warn_log',
+    EMAIL_DLQ: 'email_service.dlq',
 }as const

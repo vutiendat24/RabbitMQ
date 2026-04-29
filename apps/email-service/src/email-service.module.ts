@@ -13,22 +13,31 @@ import { BINDING_KEY, EXCHANGE, RabbitMQModuleConfig, QUEUE } from '@libs/common
     RabbitMQModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        return RabbitMQModuleConfig(
-          {
-            exchanges: [
-              { name: EXCHANGE.EMAIL_SERVICE_DIRECT.name, type: EXCHANGE.EMAIL_SERVICE_DIRECT.type, options: { durable: true } },
-            ],
-            queues: [
-              {
-                queue: QUEUE.EMAIL_SERVICE_QUEUE.name,
-                durable: QUEUE.EMAIL_SERVICE_QUEUE.durable,
-                exchange: EXCHANGE.EMAIL_SERVICE_DIRECT.name,
-                routingKey: BINDING_KEY.EMAIL_SERVICE_SEND_EMAIL,
-              },
-            ],
-          },
-          configService,
-        );
+        return {
+          ...RabbitMQModuleConfig(
+            {
+              exchanges: [
+                { name: EXCHANGE.EMAIL_SERVICE_DIRECT.name, type: EXCHANGE.EMAIL_SERVICE_DIRECT.type, options: { durable: true } },
+                { name: EXCHANGE.DLX_EXCHANGE.name, type: EXCHANGE.DLX_EXCHANGE.type, options: { durable: true } },
+              ],
+              queues: [
+                {
+                  queue: QUEUE.EMAIL_SERVICE_QUEUE.name,
+                  durable: QUEUE.EMAIL_SERVICE_QUEUE.durable,
+                  exchange: EXCHANGE.EMAIL_SERVICE_DIRECT.name,
+                  routingKey: BINDING_KEY.EMAIL_SERVICE_SEND_EMAIL,
+                  options: {
+                    deadLetterExchange: EXCHANGE.DLX_EXCHANGE.name,
+                    deadLetterRoutingKey: BINDING_KEY.EMAIL_DLQ,
+                  },
+                },
+              ],
+            },
+            configService,
+          ),
+          prefetchCount: 5,
+        }
+
       },
       inject: [ConfigService],
     }),

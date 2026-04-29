@@ -6,7 +6,7 @@ import { ConsumeMessage } from 'amqplib';
 
 @Controller()
 export class EmailServiceController {
-  constructor(private readonly emailServiceService: EmailServiceService) {}
+  constructor(private readonly emailServiceService: EmailServiceService) { }
 
   @Get()
   getHello(): string {
@@ -74,4 +74,5 @@ export class EmailServiceController {
       return new Nack(true);
     }
   }
+
 }
