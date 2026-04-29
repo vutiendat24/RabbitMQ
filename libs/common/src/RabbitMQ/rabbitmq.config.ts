@@ -11,6 +11,7 @@ interface QueueBindingConfig {
   durable: boolean;
   exchange: string;
   routingKey: string;
+  options?: { deadLetterExchange?: string; deadLetterRoutingKey?: string; durable?: boolean };
 }
 
 export interface ServiceRabbitMQConfig {

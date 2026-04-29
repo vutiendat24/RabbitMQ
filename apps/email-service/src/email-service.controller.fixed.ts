@@ -6,7 +6,7 @@ import { ConsumeMessage } from 'amqplib';
 
 @Controller()
 export class EmailServiceController {
-  constructor(private readonly emailServiceService: EmailServiceService) {}
+  constructor(private readonly emailServiceService: EmailServiceService) { }
 
   @Get()
   getHello(): string {
@@ -73,5 +73,16 @@ export class EmailServiceController {
       // Message quay lại đầu queue và sẽ được xử lý lại
       return new Nack(true);
     }
+  }
+
+  // handle  DLQ event
+  @RabbitSubscribe({
+    exchange: EXCHANGE.DLX_EXCHANGE.name,
+    routingKey: BINDING_KEY.EMAIL_DLQ,
+    queue: QUEUE.EMAIL_SERVICE_DLQ.name,
+  })
+  async handleDeadLetter(msg: any) {
+    console.error('[DLQ] Message lỗi:', JSON.stringify(msg));
+    // Lưu vào DB hoặc gửi alert
   }
 }
