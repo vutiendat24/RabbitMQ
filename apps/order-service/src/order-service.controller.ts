@@ -17,7 +17,7 @@ export class OrderServiceController {
 
   @Post('bulk-email')
   async sendBulkEmail() {
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 10; i++) {
       await this.amqpConnection.publish(
         EXCHANGE.EMAIL_SERVICE_DIRECT.name,
         BINDING_KEY.EMAIL_SERVICE_SEND_EMAIL,
@@ -27,6 +27,6 @@ export class OrderServiceController {
         },
       );
     }
-    return { sent: 100 };
+    return { sent: 10 };
   }
 }
