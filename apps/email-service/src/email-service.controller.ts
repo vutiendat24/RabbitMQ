@@ -28,6 +28,10 @@ export class EmailServiceController {
     exchange: EXCHANGE.EMAIL_SERVICE_DIRECT.name,
     routingKey: BINDING_KEY.EMAIL_SERVICE_SEND_EMAIL,
     queue: QUEUE.EMAIL_SERVICE_QUEUE.name,
+    queueOptions: {
+      deadLetterExchange: EXCHANGE.DLX_EXCHANGE.name,
+      deadLetterRoutingKey: BINDING_KEY.EMAIL_DLQ,
+    }
   })
   async sendEmail(msg: any, amqpMsg: ConsumeMessage) {
     try {
