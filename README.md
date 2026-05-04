@@ -1,39 +1,253 @@
-# 🐇 RabbitMQ - Bài Tập Thực Hành
+# 🐇 RabbitMQ — Demo Retry Message với Dead Letter Queue
 
-Dự án này là một monorepo NestJS kết hợp RabbitMQ (`@golevelup/nestjs-rabbitmq`), dùng để demo các lỗi thường gặp trong Message Queue và cách khắc phục.
+Dự án này demo cơ chế **retry message** trong RabbitMQ: mỗi message lỗi được retry tối đa 3 lần với thời gian chờ tăng dần (5s → 15s → 30s), sau đó đẩy vào DLQ.
 
+> **Stack:** NestJS monorepo + `@golevelup/nestjs-rabbitmq` + Docker Compose
 
+---
 
-## 🎯 Bài 3: Cách ly Message Lỗi (Poison Message & Dead Letter Queue)
+## 📐 Kiến trúc
 
-### Ngữ cảnh
-Gửi 100 email lỗi (chứa email không hợp lệ) từ `order-service` sang `email-service`:
-```bash
-curl -X POST http://localhost:3002/bulk-email
 ```
-Code xử lý tại `email-service` kiểm tra thấy email không có dấu `@` nên báo lỗi. 
-Nếu không có cơ chế xử lý tốt, message sẽ bị từ chối (Nack), chui ngược vào đầu hàng chờ, rồi ngay lập tức lại được lấy ra xử lý, lại gặp lỗi... tạo thành vòng lặp vô hạn làm nghẽn toàn bộ hàng đợi và làm tê liệt CPU của ứng dụng.
+                          ┌──────────────────────────────────────────────────┐
+                          │              RabbitMQ Broker                     │
+                          │                                                  │
+  order-service           │   email_service.direct (exchange)                │
+  POST /test-retry ──────►│        │                                         │
+                          │        ▼                                         │
+                          │   email_service.queue (main queue)               │
+                          │        │                                         │
+                          │        ▼                                         │
+                          │   email-service consumer                         │
+                          │        │                                         │
+                          │   ┌────┴────┐                                    │
+                          │   │ Thành   │ Thất bại                           │
+                          │   │ công    │ (retry < 3)                        │
+                          │   │         │                                    │
+                          │   ▼         ▼                                    │
+                          │  ACK    retry.direct (exchange)                  │
+                          │  (xong)     │                                    │
+                          │        ┌────┼────┐                               │
+                          │        ▼    ▼    ▼                               │
+                          │    retry.1 retry.2 retry.3                       │
+                          │    TTL 5s  TTL 15s TTL 30s                       │
+                          │        │    │    │                               │
+                          │        └────┼────┘                               │
+                          │             │ (hết TTL → DLX tự đẩy             │
+                          │             │  về email_service.direct)          │
+                          │             ▼                                    │
+                          │        Quay lại main queue                       │
+                          │             │                                    │
+                          │        Thất bại (retry >= 3)                     │
+                          │             │                                    │
+                          │             ▼                                    │
+                          │        dlx.direct (exchange)                     │
+                          │             │                                    │
+                          │             ▼                                    │
+                          │        email_service.dlq 💀                      │
+                          └──────────────────────────────────────────────────┘
+```
 
-### 🔧 Giải pháp: Sử dụng Dead Letter Queue (DLQ)
-- **Cấu hình hàng đợi chính (`email_service.queue`)**: Đặt tùy chọn `deadLetterExchange: 'dlx.direct'`. RabbitMQ sẽ ngầm hiểu: "Bất kỳ message nào bị Nack (với cờ requeue=false) ở hàng đợi này sẽ tự động bị quăng sang `dlx.direct`".
-- **Xử lý phía Code**: Bắt lỗi (`try/catch`) và trả về đối tượng `new Nack(false)` của thư viện để thông báo cho RabbitMQ biết message này bị lỗi không thể cứu chữa.
-- **Tạo hàng đợi riêng (`email_service.dlq`)**: Nơi chuyên giam giữ các message bị lỗi được `dlx.direct` đẩy vào.
+---
 
-### ⚙️ Cách chương trình vận hành
-1. `order-service` gửi đi 100 message chứa `to: 'invalid-email'`.
-2. Hàm `sendEmail` tại `email-service` nhận được, phát hiện lỗi thiếu chữ `@` nên tung lỗi (throw Error).
-3. Khối `catch` bắt lỗi và gọi `return new Nack(false)`.
-4. RabbitMQ nhận tín hiệu từ chối này, gỡ message khỏi hàng chờ chính và bứng sang **Dead Letter Exchange (dlx.direct)**.
-5. DLX chuyển tiếp message về **Dead Letter Queue (email_service.dlq)**.
-6. Hàm `handleDeadLetter` đang lắng nghe trên DLQ tóm lấy message lỗi, in ra cảnh báo an toàn mà không làm nghẽn hệ thống.
+## 🚀 Các bước thực hiện
 
-### 🌟 3 Ý nghĩa sống còn trong thực tế
+### Bước 1: Khởi động RabbitMQ
 
-1. **Chống sập hệ thống do vòng lặp vô hạn (Infinite Loop):**
-   Nếu một API hoặc thư viện third-party mà service của bạn phụ thuộc đang bị sập (lỗi 500) hoặc data truyền xuống từ người dùng bị sai format, nếu message cứ lặp lại mãi mãi thì CPU sẽ tăng vọt 100%. DLQ giống như khu vực "cách ly" mầm bệnh ngay lập tức để hệ thống rảnh tay xử lý các việc hợp lệ khác.
-   
-2. **Không bao giờ làm mất dữ liệu (Zero Data Loss):**
-   Trong ngành tài chính - ngân hàng, mỗi message là một giao dịch tiền bạc. Lỗi xảy ra có thể do nghẽn mạng hoặc tài khoản khách hàng hết tiền. Thay vì hệ thống âm thầm xoá message (làm mất dấu giao dịch) hoặc vứt ngược về hàng đợi, việc chuyển vào DLQ giúp đội ngũ hỗ trợ (CS/Dev) có thể truy ra nguyên nhân, và hoàn toàn có thể khôi phục (replay/retry) lại giao dịch bằng tay bất kỳ lúc nào họ sửa xong lỗi.
+```bash
+docker compose up rabbitmq -d
+```
 
-3. **Tăng cường khả năng theo dõi (Observability & Alerting):**
-   Thay vì chỉ ghi ra console, hệ thống thực tế thường cài đặt thêm các trigger. Bất cứ khi nào có 1 message rơi vào hàng đợi DLQ, một webhook sẽ chạy và bắn cảnh báo thẳng lên ứng dụng chat Slack hoặc Telegram của đội Dev (ví dụ: *"🚨 Cảnh báo: Có hóa đơn thanh toán không xuất được, vui lòng kiểm tra DLQ ngay!"*). Điều này giúp đội ngũ kỹ thuật chủ động sửa lỗi trước cả khi khách hàng kịp phàn nàn.
+Chờ RabbitMQ healthy, truy cập Management UI: http://localhost:15672 (admin/admin)
+
+### Bước 2: Xóa queue cũ (nếu có)
+
+> ⚠️ **BẮT BUỘC** nếu đã chạy bài demo trước đó.
+> RabbitMQ không cho phép thay đổi arguments (TTL, DLX) của queue đã tồn tại.
+
+Vào Management UI → tab **Queues** → xóa các queue sau (nếu có):
+- `email_service.queue`
+- `email_service.dlq`
+- `email.retry.1`, `email.retry.2`, `email.retry.3`
+
+### Bước 3: Chạy services
+
+```bash
+docker compose up --build
+```
+
+Hoặc chạy thủ công (nếu dev local):
+
+```bash
+# Terminal 1 — order-service (port 3002)
+npx nest start order-service --watch
+
+# Terminal 2 — email-service (port 3001)
+npx nest start email-service --watch
+```
+
+### Bước 4: Gửi message test
+
+**Gửi 1 email:**
+
+```bash
+curl -X POST http://localhost:3002/test-retry
+```
+
+**Gửi 5 email cùng lúc (khuyến nghị — thấy rõ retry hơn):**
+
+```bash
+curl -X POST http://localhost:3002/test-retry-batch
+```
+
+### Bước 5: Quan sát kết quả
+
+#### Console email-service
+
+```
+[23:40:01] 📩 Nhận message (lần thử: 1/4) — nva@gmail.com
+  ✅ GỬI EMAIL THÀNH CÔNG                      ← may mắn, qua ngay
+
+[23:40:01] 📩 Nhận message (lần thử: 1/4) — ttb@yahoo.com
+  ❌ Lỗi SMTP: 503 Service Unavailable
+  🔄 Retry 1/3 → chờ 5s rồi thử lại           ← lỗi, chờ retry
+
+  ... (5s sau) ...
+
+[23:40:06] 📩 Nhận message (lần thử: 2/4) — ttb@yahoo.com
+  ✅ GỬI EMAIL THÀNH CÔNG
+  🎉 Thành công sau 1 lần retry!                ← retry thành công!
+
+  ... (nếu message xui, retry 3 lần vẫn lỗi) ...
+
+💀💀💀💀💀
+[DLQ] Email không gửi được sau 4 lần thử
+[DLQ] Tới: lvc@outlook.com
+[DLQ] → Cần xử lý thủ công                     ← vào DLQ
+```
+
+#### Management UI
+
+Quan sát tab **Queues** — message di chuyển giữa các queue:
+
+| Thời điểm | `email_service.queue` | `email.retry.1` | `email.retry.2` | `email.retry.3` | `email_service.dlq` |
+|---|---|---|---|---|---|
+| 0s | 5 messages | 0 | 0 | 0 | 0 |
+| 1s | 0 | 2-3 (lỗi) | 0 | 0 | 0 |
+| 6s | 2-3 (retry) | 0 | 0-1 | 0 | 0 |
+| 21s | 0-1 | 0 | 0 | 0-1 | 0 |
+| 51s | 0 | 0 | 0 | 0 | 0-1 |
+
+---
+
+## 📁 Cấu trúc code
+
+### Constants — `libs/common/src/RabbitMQ/rabbitmq.constants.ts`
+
+```typescript
+// Exchange cho retry
+RETRY_EXCHANGE: { name: 'retry.direct', type: 'direct' }
+
+// 3 retry queues với TTL tăng dần
+EMAIL_RETRY_1: { name: 'email.retry.1' }  // 5s
+EMAIL_RETRY_2: { name: 'email.retry.2' }  // 15s
+EMAIL_RETRY_3: { name: 'email.retry.3' }  // 30s
+
+// Config retry
+RETRY_CONFIG = {
+    MAX_RETRIES: 3,
+    QUEUES: [
+        { queue: 'email.retry.1', routingKey: 'email.retry.1', ttl: 5000 },
+        { queue: 'email.retry.2', routingKey: 'email.retry.2', ttl: 15000 },
+        { queue: 'email.retry.3', routingKey: 'email.retry.3', ttl: 30000 },
+    ],
+};
+```
+
+### Module — `apps/email-service/src/email-service.module.retry-demo.ts`
+
+Khai báo 3 exchanges và 3 retry queues:
+
+```typescript
+// Mỗi retry queue có 3 arguments quan trọng:
+{
+  name: 'email.retry.1',
+  options: {
+    arguments: {
+      'x-message-ttl': 5000,                                    // ① Sống được 5s
+      'x-dead-letter-exchange': 'email_service.direct',          // ② Hết hạn → đẩy vào exchange này
+      'x-dead-letter-routing-key': 'email_service.send_email',   // ③ Với routing key này
+    },
+  },
+  exchange: 'retry.direct',        // Bind với retry exchange
+  routingKey: 'email.retry.1',     // Để consumer publish vào đúng queue
+}
+```
+
+### Controller — `apps/email-service/src/email-service.controller.retry-demo.ts`
+
+```typescript
+async sendEmail(msg, amqpMsg) {
+  const retryCount = amqpMsg.properties.headers?.['x-retry-count'] || 0;
+
+  try {
+    this.simulateSmtpSend(msg.to, retryCount);  // Gọi SMTP (có thể lỗi)
+    return;  // ✅ Thành công → ack
+
+  } catch (error) {
+    if (retryCount < 3) {
+      // Còn lượt → publish vào retry queue tương ứng
+      const retryInfo = RETRY_CONFIG.QUEUES[retryCount];
+      await this.amqpConnection.publish(
+        'retry.direct', retryInfo.routingKey, msg,
+        { headers: { 'x-retry-count': retryCount + 1 } },
+      );
+      return;  // ack message cũ
+
+    } else {
+      // Hết lượt → publish vào DLQ
+      await this.amqpConnection.publish('dlx.direct', 'email_service.dlq', msg);
+      return;  // ack message cũ
+    }
+  }
+}
+```
+
+---
+
+## ❓ Giải thích cơ chế
+
+### Tại sao cần retry queue riêng thay vì `Nack(requeue=true)`?
+
+| | `Nack(requeue=true)` | Retry queue với TTL |
+|---|---|---|
+| Delay giữa các lần retry | ❌ Không — retry ngay lập tức | ✅ Có — 5s, 15s, 30s |
+| Đếm số lần retry | ❌ Không thể | ✅ Qua header `x-retry-count` |
+| Giới hạn retry | ❌ Lặp vô hạn | ✅ Tối đa 3 lần |
+| Ảnh hưởng queue chính | ❌ Nghẽn toàn bộ | ✅ Không ảnh hưởng |
+
+### Message quay lại main queue bằng cách nào?
+
+Retry queue **không có consumer**. Message nằm chờ đến khi hết TTL → RabbitMQ tự động dùng DLX (Dead Letter Exchange) đẩy message về `email_service.direct` → routing vào `email_service.queue` → consumer `sendEmail()` nhận lại.
+
+### SMTP giả lập hoạt động ra sao?
+
+```
+Lần thử 1: 70% lỗi  (SMTP server đang quá tải)
+Lần thử 2: 50% lỗi  (server bắt đầu phục hồi)
+Lần thử 3: 30% lỗi  (gần ổn định)
+Lần thử 4: 10% lỗi  (đã ổn định)
+```
+
+→ Đa số email sẽ gửi thành công sau 1-2 lần retry. Chỉ những email "xui" (lỗi cả 4 lần) mới vào DLQ.
+
+---
+
+## 🔄 Chuyển về code cũ (bài DLQ đơn giản)
+
+Sửa `apps/email-service/src/main.ts`:
+
+```diff
+-import { EmailServiceModule } from './email-service.module.retry-demo';
++import { EmailServiceModule } from './email-service.module';
+```
